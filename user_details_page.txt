@@ -1,0 +1,412 @@
+import mysql.connector
+import random
+
+# Connect to MySQL
+conn_obj = mysql.connector.connect(
+    host="localhost",
+    user="root",
+    password="Souvik@1996",
+    auth_plugin="mysql_native_password",
+    database = "bank_database"
+)
+cur_obj = conn_obj.cursor()
+
+
+# Create a user's personal details table
+cur_obj.execute('''
+    CREATE TABLE IF NOT EXISTS personal_details (
+        user_id VARCHAR(50) PRIMARY KEY NOT NULL,
+        type_of_account VARCHAR(50) NOT NULL,
+        account_no VARCHAR(50) NOT NULL,
+        full_name VARCHAR(50) NOT NULL,
+        email_id VARCHAR(50) NOT NULL,
+        ph_number VARCHAR(50) NOT NULL,
+        date_of_birth DATE NOT NULL,
+        address VARCHAR(150) NOT NULL
+    )
+''')
+
+# Create a user's professional details table
+cur_obj.execute('''
+    CREATE TABLE IF NOT EXISTS professional_details (
+        user_id VARCHAR(50) PRIMARY KEY NOT NULL,
+        occupation VARCHAR(50) NOT NULL,
+        job_sector VARCHAR(50) NOT NULL,
+        income VARCHAR(50) NOT NULL
+    )
+''')
+
+def generate_account_number():
+    return "".join(random.choices("0123456789", k = 10))
+
+# Function to store user's personal details
+def personal_details(user_id, type_of_account, account_no, full_name, email_id, ph_number, date_of_birth, address):
+    try:
+        cur_obj.execute(
+            "INSERT INTO personal_details (user_id, type_of_account, account_no, full_name, email_id, ph_number, date_of_birth, address) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+            (user_id, type_of_account, account_no, full_name, email_id, ph_number, date_of_birth, address))
+        conn_obj.commit()
+    except mysql.connector.Error as err:
+        print(f"Error: {err}")
+        conn_obj.rollback()
+
+# Function to store user's professional details
+def proffessional_details(user_id, occupation, job_sector, income):
+    try:
+        cur_obj.execute(
+            "INSERT INTO professional_details (user_id, occupation, job_sector, income) VALUES (%s, %s, %s, %s)",
+            (user_id, occupation, job_sector, income))
+        conn_obj.commit()
+    except mysql.connector.Error as err:
+        print(f"Error: {err}")
+        conn_obj.rollback()
+
+# Function to see user's all details after inner joining personal details & professionalo details
+def retrieve_user_details(user_id):
+    try:
+        cur_obj.execute("""
+        SELECT * 
+        FROM personal_details
+        INNER JOIN professional_details
+        ON personal_details.user_id = professional_details.user_id
+        WHERE personal_details.user_id = %s
+        """, (user_id,))
+        result = cur_obj.fetchall()
+        if result:
+            print("USER ID: ", result[0][0])
+            print("TYPE OF ACCOUNT: ", result[0][1])
+            print("ACCOUNT NUMBER: ", result[0][2])
+            print("FULL NAME: ", result[0][3])
+            print("EMAIL ID: ", result[0][4])
+            print("PHONE NUMBER: ", result[0][5])
+            print("DATE OF BIRTH: ", result[0][6])
+            print("ADDRESS.: ", result[0][7])
+            print("OCCUPATION: ", result[0][9])
+            print("JOB SECTOR: ", result[0][10])
+            print("INCOME: ", result[0][11])
+        else:
+            print("USER NOT FOUND")
+
+    except mysql.connector.Error as err:
+        print(f"Error: {err}")
+        conn_obj.rollback()
+
+#Define function update_data()
+def update_data(user_id,ph_number):
+
+    try:
+        cur_obj.execute(f"UPDATE personal_details SET ph_number = %s WHERE user_id = %s", (ph_number, user_id))
+        print("DETAILS HAVE BEEN UPDATED.")
+        conn_obj.commit()
+    except mysql.connector.Error as e:
+        print("Error retrieving data from MySQL:", e)
+        conn_obj.rollback()
+
+    try:
+        cur_obj.execute(f"select * from personal_details WHERE user_id = %s", (user_id,))
+        result1 = cur_obj.fetchone()
+        conn_obj.commit()
+    except mysql.connector.Error as e:
+        print("Error retrieving data from MySQL:", e)
+        conn_obj.rollback()
+
+    # Print or process the retrieved data using list unpacking
+    if result1:
+        user_id, type_of_account, account_no, full_name, email_id, ph_number, date_of_birth, address = result1  # Unpacking the row into variables
+        # Print data in proper sequence using f-strings
+        print(f"DATA FOR USER: '{full_name}'")
+        print("----------------------------------")
+        print(f"USER ID: {user_id}")
+        print(f"ACCOUNT TYPE: {type_of_account}")
+        print(f"ACCOUNT NUMBER: {account_no}")
+        print(f"STUDENT NAME: {full_name}")
+        print(f"EMAIL ID: {email_id}")
+        print(f"PHONE NUMBER: {ph_number}")
+        print(f"DATE OF BIRTH: {date_of_birth}")
+        print(f"ADDRESS: {address}")
+    else:
+        print("NO USER FOUND WITH THE PROVIDED NAME.")
+
+
+# User Details Upload Menu
+while True:
+    print("\nCHOOSE THE RIGHT OPTION BETWEEN (1 TO 4): ")
+    print("1. CREATE YOUR BANK ACCOUNT")
+    print("2. CHECK YOUR DETAILS")
+    print("3. UPDATE YOUR DETAILS(ONLY PHONE NUMBER)")
+    print("4. LOGOUT")
+
+    option = input("\nPLEASE SELECT RIGHT OPTION IN BETWEEN (1/2/3/4): ")
+
+    if option == "1":
+        print("\nENTER YOUR BASIC DETAILS:- ")
+        print("\n1. SAVING ACCOUNT")
+        print("2. SALARY ACCOUNT")
+        option = input("\nPLEASE SELECT RIGHT OPTION IN BETWEEN 1 OR 2 TO UPLOAD YOUR DETAILS: ")
+
+        if option == "1":
+            user_id = input("\nENTER YOUR USER ID: ")
+            try:
+                cur_obj.execute("SELECT * FROM personal_details WHERE user_id = %s", (user_id,))
+                result1 = cur_obj.fetchall()
+
+                if result1:
+                    print("THIS USER ID IS USED BEFORE")
+                    break
+                else:
+                    print(" ")
+
+            except mysql.connector.Error as err:
+                print(f"Error: {err}")
+                conn_obj.rollback()
+            if user_id.startswith("UIC"):
+                print(" ")
+            else:
+                print("NOT OK")
+                break
+
+            type_of_account = "SAVING ACCOUNT"
+
+            account_no = generate_account_number()
+
+            full_name = input("ENTER FULL NAME: ")
+            try:
+                cur_obj.execute("SELECT * FROM personal_details WHERE full_name = %s", (full_name,))
+                result = cur_obj.fetchall()
+
+                if result:
+                    print("THIS NAME IS USED BEFORE")
+                    break
+                else:
+                    print(" ")
+            except mysql.connector.Error as err:
+                print(f"Error: {err}")
+                conn_obj.rollback()
+            if type(full_name) == str and full_name.isupper():
+                print(" ")
+            else:
+                print("NOT OK")
+                break
+
+            email_id = input("ENTER YOUR EMAIL ID: ")
+            try:
+                cur_obj.execute("SELECT * FROM personal_details WHERE email_id = %s", (email_id,))
+                result = cur_obj.fetchall()
+
+                if result:
+                    print("THIS EMAIL ID IS USED BEFORE")
+                    break
+                else:
+                    print(" ")
+            except mysql.connector.Error as err:
+                print(f"Error: {err}")
+                conn_obj.rollback()
+            if email_id.find("@") != -1 and email_id.endswith(".com"):
+                print(" ")
+            else:
+                print("NOT OK")
+                break
+            ph_number = input("ENTER YOUR PHONE NUMBER: ")
+            try:
+                cur_obj.execute("SELECT * FROM personal_details WHERE ph_number = %s", (ph_number,))
+                result = cur_obj.fetchall()
+
+                if result:
+                    print("THIS PHONE NUMBER IS USED BEFORE")
+                    break
+                else:
+                    print(" ")
+            except mysql.connector.Error as err:
+                print(f"Error: {err}")
+                conn_obj.rollback()
+            if len(ph_number) == 10 and ph_number[0] == "6" or ph_number[0] == "7" or ph_number[0] == "8" or ph_number[0] == "9":
+                print(" ")
+            else:
+                print("NOT OK")
+                break
+
+            date_of_birth = input("ENTER YOUR DATE OF BIRTH(FORMAT - YYYY-MM-DD): ")
+
+            address = input("\nENTER YOUR PERMANENT ADDRESS(WITHIN 150 WORDS & ALL IN CAPITAL LETTER): ")
+            if len(address) < 151 and address.isupper() == True:
+                print(" ")
+            else:
+                print("ADDRESS IS NOT OK")
+                break
+
+            print("USER'S PERSONAL DETAILS UPLOADED SUCCESFULLY....")
+            personal_details(user_id, type_of_account, account_no, full_name, email_id, ph_number, date_of_birth, address)
+
+            print("\nNOW, PLEASE UPLOAD YOUR PROFESSIONAL DETAILS:")
+            user_id = input("\nENTER YOUR USER ID: ")
+            try:
+                cur_obj.execute("SELECT * FROM professional_details WHERE user_id = %s", (user_id,))
+                result1 = cur_obj.fetchall()
+
+                if result1:
+                    print("THIS USER ID IS USED BEFORE")
+                    break
+                else:
+                    print(" ")
+
+            except mysql.connector.Error as err:
+                print(f"Error: {err}")
+                conn_obj.rollback()
+            if user_id.startswith("UIC"):
+                print(" ")
+            else:
+                print("NOT OK")
+                break
+            occupation = input("ENTER YOUR OCCUPATION: ")
+            job_sector = input("\n\nENTER YOUR JOB SECTOR(PRIVATE/GOVT./NA): ")
+            if job_sector == "PRIVATE" or "GOVT." or "NA":
+                print(" ")
+            else:
+                print("NOT OK")
+            income = input("\nENTER INCOME (YEARLY): ")
+            print("\nUSER'S PROFESSIONAL DETAILS UPLOADED SUCCESFULLY....")
+            print(f"\nYOUR ACCOUNT NUMBER: {account_no}")
+            print("NOW, GO TO YOUR LOGIN PAGE TO DEPOSIT MONEY/WITHDRAWL MONEY/TRANSFER MONEY")
+            proffessional_details(user_id, occupation, job_sector, income)
+
+        elif option == "2":
+            user_id = input("\nENTER YOUR USER ID: ")
+            try:
+                cur_obj.execute("SELECT * FROM personal_details WHERE user_id = %s", (user_id,))
+                result1 = cur_obj.fetchall()
+
+                if result1:
+                    print("THIS USER ID IS USED BEFORE")
+                    break
+                else:
+                    print(" ")
+
+            except mysql.connector.Error as err:
+                print(f"Error: {err}")
+                conn_obj.rollback()
+            if user_id.startswith("UIC"):
+                print(" ")
+            else:
+                print("NOT OK")
+                break
+
+            type_of_account = "SALARY ACCOUNT"
+
+            account_no = generate_account_number()
+
+            full_name = input("ENTER FULL NAME: ")
+            try:
+                cur_obj.execute("SELECT * FROM personal_details WHERE full_name = %s", (full_name,))
+                result = cur_obj.fetchall()
+
+                if result:
+                    print("THIS NAME IS USED BEFORE")
+                    break
+                else:
+                    print(" ")
+            except mysql.connector.Error as err:
+                print(f"Error: {err}")
+                conn_obj.rollback()
+            if type(full_name) == str and full_name.isupper():
+                print(" ")
+            else:
+                print("NOT OK")
+                break
+
+            email_id = input("ENTER YOUR EMAIL ID: ")
+            try:
+                cur_obj.execute("SELECT * FROM personal_details WHERE email_id = %s", (email_id,))
+                result = cur_obj.fetchall()
+
+                if result:
+                    print("THIS EMAIL ID IS USED BEFORE")
+                    break
+                else:
+                    print(" ")
+            except mysql.connector.Error as err:
+                print(f"Error: {err}")
+                conn_obj.rollback()
+            if email_id.find("@") != -1 and email_id.endswith(".com"):
+                print(" ")
+            else:
+                print("NOT OK")
+                break
+            ph_number = input("ENTER YOUR PHONE NUMBER: ")
+            try:
+                cur_obj.execute("SELECT * FROM personal_details WHERE ph_number = %s", (ph_number,))
+                result = cur_obj.fetchall()
+
+                if result:
+                    print("THIS PHONE NUMBER IS USED BEFORE")
+                    break
+                else:
+                    print(" ")
+            except mysql.connector.Error as err:
+                print(f"Error: {err}")
+                conn_obj.rollback()
+            if len(ph_number) == 10 and ph_number[0] == "6" or ph_number[0] == "7" or ph_number[0] == "8" or ph_number[0] == "9":
+                print(" ")
+            else:
+                print("NOT OK")
+                break
+
+            date_of_birth = input("ENTER YOUR DATE OF BIRTH(FORMAT - YYYY-MM-DD): ")
+
+            address = input("\nENTER YOUR PERMANENT ADDRESS(WITHIN 150 WORDS & ALL IN CAPITAL LETTER): ")
+            if len(address) < 151 and address.isupper() == True:
+                print(" ")
+            else:
+                print("ADDRESS IS NOT OK")
+                break
+
+            print("USER'S PERSONAL DETAILS UPLOADED SUCCESFULLY....")
+            personal_details(user_id, type_of_account, account_no, full_name, email_id, ph_number, date_of_birth, address)
+
+            print("\nNOW, PLEASE UPLOAD YOUR PROFESSIONAL DETAILS:")
+            user_id = input("\nENTER YOUR USER ID: ")
+            try:
+                cur_obj.execute("SELECT * FROM professional_details WHERE user_id = %s", (user_id,))
+                result1 = cur_obj.fetchall()
+
+                if result1:
+                    print("THIS USER ID IS USED BEFORE")
+                    break
+                else:
+                    print(" ")
+
+            except mysql.connector.Error as err:
+                print(f"Error: {err}")
+                conn_obj.rollback()
+            if user_id.startswith("UIC"):
+                print(" ")
+            else:
+                print("NOT OK")
+                break
+            occupation = input("ENTER YOUR OCCUPATION: ")
+            job_sector = input("\n\nENTER YOUR JOB SECTOR(PRIVATE/GOVT.): ")
+            if job_sector == "PRIVATE" or "GOVT.":
+                print(" ")
+            else:
+                print("NOT OK")
+            income = input("\nENTER INCOME (YEARLY): ")
+            print("\nUSER'S PROFESSIONAL DETAILS UPLOADED SUCCESFULLY....")
+            print(f"\nYOUR ACCOUNT NUMBER: {account_no}")
+            print("NOW, GO TO YOUR LOGIN PAGE TO DEPOSIT MONEY/WITHDRAWL MONEY/TRANSFER MONEY")
+            proffessional_details(user_id, occupation, job_sector, income)
+        else:
+            print("INVALID OPTION")
+    elif option == "2":
+        user_id_to_fetch = input("ENTER YOUR USER ID TO SEE YOUR ALL DETAILS: ")
+        retrieve_user_details(user_id_to_fetch)
+    elif option == "3":
+        user_id = input("ENTER USER ID:")
+        ph_number = input("ENTER NEW PHONE NUMBER:")
+        update_data(user_id, ph_number)
+    elif option == "4":
+        print("LOGOUT DONE SUCCESSFULY")
+        break
+    else:
+        print("INVALID OPTION")
+
+# Close the cursor and connection
+conn_obj.close()

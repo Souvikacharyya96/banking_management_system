@@ -1,0 +1,521 @@
+import mysql.connector
+from decimal import Decimal
+
+# Connect to MySQL
+conn_obj = mysql.connector.connect(
+    host="localhost",
+    user="root",
+    password="Souvik@1996",
+    auth_plugin="mysql_native_password",
+    database="bank_database"
+)
+cur_obj = conn_obj.cursor()
+
+cur_obj.execute('''
+    CREATE TABLE IF NOT EXISTS account_details (
+        user_id VARCHAR(50) PRIMARY KEY NOT NULL,
+        account_no VARCHAR(50) NOT NULL,
+        full_name VARCHAR(50) NOT NULL,
+        balance DECIMAL(10,2) DEFAULT 0.0
+    )
+''')
+
+cur_obj.execute('''
+    CREATE TABLE IF NOT EXISTS deposit_money (
+        user_id VARCHAR(50) PRIMARY KEY NOT NULL,
+        account_no VARCHAR(50) NOT NULL,
+        full_name VARCHAR(50) NOT NULL,
+        amount DECIMAL(10,2),
+        date_of_deposit DATE NOT NULL 
+    )
+''')
+
+cur_obj.execute('''
+    CREATE TABLE IF NOT EXISTS withdrawl_money (
+        user_id VARCHAR(50) PRIMARY KEY NOT NULL,
+        account_no VARCHAR(50) NOT NULL,
+        full_name VARCHAR(50) NOT NULL,
+        amount DECIMAL(10,2),
+        date_of_withdrawl DATE NOT NULL 
+    )
+''')
+
+# Create a transactions table
+cur_obj.execute('''
+    CREATE TABLE IF NOT EXISTS transactions (
+        transaction_id INT AUTO_INCREMENT PRIMARY KEY,
+        sender_id VARCHAR(50) NOT NULL,
+        receiver_id VARCHAR(50) NOT NULL,
+        amount DECIMAL(10, 2),
+        date_of_transaction DATE NOT NULL,
+        FOREIGN KEY (sender_id) REFERENCES account_details(user_id),
+        FOREIGN KEY (receiver_id) REFERENCES account_details(user_id)
+    )
+''')
+
+# Creating a function for User's account details
+def account_details(user_id, full_name, account_no, balance):
+    try:
+        cur_obj.execute(
+            "INSERT INTO account_details (user_id, full_name, account_no, balance) VALUES (%s, %s, %s, %s)",
+            (user_id, full_name, account_no, balance))
+        conn_obj.commit()
+        print("ACCOUNT DETAILS UPLOADED SUCCESSFULY.")
+    except mysql.connector.Error as err:
+        print(f"Error creating account details: {err}")
+        conn_obj.rollback()
+
+# Creating a function to deposit money
+def deposit_money(user_id, account_no, full_name, amount, date_of_deposit):
+    try:
+        # Check user's balance
+        cur_obj.execute("SELECT balance FROM account_details WHERE user_id = %s", (user_id,))
+        user_balance = cur_obj.fetchone()[0]
+
+        if user_balance >= 0:
+            cur_obj.execute("UPDATE account_details SET balance = balance + %s WHERE user_id = %s", (amount, user_id))
+
+            cur_obj.execute(
+                "INSERT INTO deposit_money (user_id, account_no, full_name, amount, date_of_deposit) VALUES (%s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE amount = amount + %s",
+                (user_id, account_no, full_name, amount, date_of_deposit, amount))
+            conn_obj.commit()
+            print("DEPOSIT SUCCESSFUL")
+            print(f"AVAILABLE BALANCE: {user_balance + Decimal(str(amount))}")
+
+    except mysql.connector.Error as err:
+        print(f"Error: {err}")
+        conn_obj.rollback()
+
+# Creating a function to withdraw money
+def withdrawl_money(user_id, account_no, full_name, amount, date_of_withdrawl):
+    try:
+        # Check user's balance
+        cur_obj.execute("SELECT balance FROM account_details WHERE user_id = %s", (user_id,))
+        user_balance = cur_obj.fetchone()[0]
+
+        if user_balance >= amount:
+            cur_obj.execute("UPDATE account_details SET balance = balance - %s WHERE user_id = %s", (amount, user_id))
+
+            cur_obj.execute(
+                "INSERT INTO withdrawl_money (user_id, account_no, full_name, amount, date_of_withdrawl) VALUES (%s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE amount = amount + %s",
+                (user_id, account_no, full_name, amount, date_of_withdrawl, amount))
+            conn_obj.commit()
+            print("WITHDRAWAL SUCCESSFUL")
+            print(f"AVAILABLE BALANCE: {user_balance - Decimal(str(amount))}")
+
+    except mysql.connector.Error as err:
+        print(f"Error: {err}")
+        conn_obj.rollback()
+
+
+# Creating a function to transfer money
+def transfer_money(sender_id, receiver_id, amount, date_of_transaction):
+    try:
+        # Check sender's balance
+        cur_obj.execute("SELECT balance FROM account_details WHERE user_id = %s", (sender_id,))
+        sender_balance = cur_obj.fetchone()[0]
+
+        # If sender has sufficient balance, proceed with the transfer
+        if sender_balance >= amount:
+            # Update sender's balance
+            cur_obj.execute("UPDATE account_details SET balance = balance - %s WHERE user_id = %s", (amount, sender_id))
+
+            # Update receiver's balance
+            cur_obj.execute("UPDATE account_details SET balance = balance + %s WHERE user_id = %s", (amount, receiver_id))
+
+            # Insert a new transaction record
+            cur_obj.execute("INSERT INTO transactions (sender_id, receiver_id, amount, date_of_transaction) VALUES (%s, %s, %s, %s)",
+                            (sender_id, receiver_id, amount, date_of_transaction))
+
+            conn_obj.commit()
+            print("TRANSFERED SUCCESSFUL")
+        else:
+            print("INSUFFICIENT FUNDS")
+
+    except mysql.connector.Error as err:
+        print(f"Error: {err}")
+        conn_obj.rollback()
+
+# Creating a function to check User's account balance
+def check_balance(user_id,account_no):
+    try:
+        cur_obj.execute("SELECT * FROM account_details WHERE user_id = %s AND account_no = %s", (user_id, account_no,))
+        user = cur_obj.fetchall()
+        if user:
+            print("YOUR ACCOUNT BALANCE: ", user[0][3])
+        else:
+            print("YOU HAVE ENTERED WRONG USER ID & ACCOUNT NO")
+
+    except mysql.connector.Error as err:
+        print(f"Error: {err}")
+        conn_obj.rollback()
+
+# Creating a function to see User's transaction history
+def transaction_history(user_id):
+    try:
+        cur_obj.execute("SELECT * FROM transactions WHERE sender_id = %s", (user_id,))
+        user = cur_obj.fetchall()
+        if user:
+            print("|", "SENDER".center(15), "|".center(15), "RECIEVER".center(15), "|".center(15), "AMOUNT".center(15),
+                  "|".center(15), "DATE OF TRANSACTION".center(15), "|".center(15))
+            print(" ".center(5), user[0][1], " ".center(24), user[0][2], " ".center(21), user[0][3], " ".center(20),
+                  user[0][4])
+        else:
+            print(" ")
+    except mysql.connector.Error as err:
+        print(f"Error: {err}")
+        conn_obj.rollback()
+
+def deposit_withdrawl_history(user_id):
+    try:
+        cur_obj.execute("SELECT * FROM deposit_money WHERE user_id = %s", (user_id,))
+        user = cur_obj.fetchall()
+        if user:
+            print("|", "USER ID".center(15), "|".center(15), "ACCOUNT NUMBER".center(15), "|".center(15), "FULL NAME".center(15),
+                  "|".center(15), "DATE OF DEPOSIT".center(15), "|".center(15) ,"AMOUNT".center(15), "|".center(15))
+            print(" ".center(5), user[0][0], " ".center(20), user[0][1], " ".center(19), user[0][2], " ".center(18),
+                  user[0][4], " ".center(18), user[0][3])
+        else:
+            print("YOU HAVE ENTERED WRONG USER ID")
+
+        cur_obj.execute("SELECT * FROM withdrawl_money WHERE user_id = %s", (user_id,))
+        user = cur_obj.fetchall()
+        if user:
+            print("|", "USER ID".center(15), "|".center(15), "ACCOUNT NUMBER".center(15), "|".center(15),
+                  "FULL NAME".center(15),
+                  "|".center(15), "DATE OF WITHDRAWL".center(15), "|".center(15), "AMOUNT".center(13), "|".center(15))
+            print(" ".center(5), user[0][0], " ".center(20), user[0][1], " ".center(19), user[0][2], " ".center(18),
+                  user[0][4], " ".center(18), user[0][3])
+        else:
+            print("YOU HAVE ENTERED WRONG USER ID")
+
+    except mysql.connector.Error as err:
+        print(f"Error: {err}")
+        conn_obj.rollback()
+
+# Transaction Menu
+print("\nCHOOSE RIGHT OPTION TO COMPLETE YOUR TRANSACTION")
+
+while True:
+    print("\n1. UPLOAD YOUR ACCOUNT DETAILS")
+    print("2. MAKE YOUR TRANSACTION")
+    print("3. TRANSACTION HISTORY")
+    print("4. CHECK BALANCE")
+    print("5. EXIT")
+
+    option = input("\nENTER YOUR OPTION BETWEEN 1/2/3/4: ")
+
+    if option == '1':
+        user_id = input("\nENTER YOUR VALIDATE USER ID: ")
+        if user_id.startswith("UIC"):
+            print(" ")
+        else:
+            print("NOT OK")
+            break
+
+        account_no = input("ENTER YOUR ACCOUNT NO: ")
+        if len(account_no) == 10:
+            print(" ")
+        else:
+            print("NOT OK")
+            break
+
+        full_name = input("ENTER YOUR FULL NAME(IN CAPITAL LETTERS): ")
+        if full_name.isupper() == True:
+            print(" ")
+        else:
+            print("NOT OK")
+            break
+
+        balance = 0.0
+        account_details(user_id, full_name, account_no, balance)
+
+    elif option == '2':
+        print("\nTRANSACTION MENU:")
+        print("1. DEPOSIT")
+        print("2. WITHDRAW")
+        print("3. TRANSFER MONEY")
+        print("4. CHECK BALANCE")
+        print("5. EXIT")
+
+        user_choice = input("ENTER YOUR CHOICE BETWEEN(1/2/3/4): ")
+
+        if user_choice == '1':
+            user_id = input("\nENTER YOUR USER ID: ")
+            try:
+                cur_obj.execute("SELECT * FROM account_details WHERE user_id = %s", (user_id,))
+                result = cur_obj.fetchall()
+
+                if result:
+                    print(" ")
+                else:
+                    print("USER ID IS NOT AVAILABLE")
+                    break
+
+            except mysql.connector.Error as err:
+                print(f"Error: {err}")
+                conn_obj.rollback()
+            if user_id.startswith("UIC"):
+                print(" ")
+            else:
+                print("NOT OK")
+                break
+            account_no = input("ENTER YOUR ACCOUNT NO: ")
+            try:
+                cur_obj.execute("SELECT * FROM account_details WHERE account_no = %s", (account_no,))
+                result = cur_obj.fetchall()
+
+                if result:
+                    print(" ")
+                else:
+                    print("ACCOUNT NUMBER IS NOT AVAILABLE")
+                    break
+
+            except mysql.connector.Error as err:
+                print(f"Error: {err}")
+                conn_obj.rollback()
+            if len(account_no) == 10:
+                print(" ")
+            else:
+                print("NOT OK")
+                break
+            full_name = input("ENTER YOUR FULL NAME(IN CAPITAL LETTERS): ")
+            try:
+                cur_obj.execute("SELECT * FROM account_details WHERE full_name = %s", (full_name,))
+                result = cur_obj.fetchall()
+
+                if result:
+                    print(" ")
+                else:
+                    print("THIS NAME IS NOT AVAILABLE")
+                    break
+
+            except mysql.connector.Error as err:
+                print(f"Error: {err}")
+                conn_obj.rollback()
+            if full_name.isupper() == True:
+                print(" ")
+            else:
+                print("NOT OK")
+                break
+            amount = float(input("\nENTER AMOUNT TO DEPOSIT: "))
+            date_of_deposit = input("\nENTER THE DATE(YYYY-MM-DD): ")
+            deposit_money(user_id, account_no, full_name, amount, date_of_deposit)
+        elif user_choice == '2':
+            user_id = input("\nENTER YOUR USER ID: ")
+            try:
+                cur_obj.execute("SELECT * FROM account_details WHERE user_id = %s", (user_id,))
+                result = cur_obj.fetchall()
+
+                if result:
+                    print(" ")
+                else:
+                    print("USER ID IS NOT AVAILABLE")
+                    break
+
+            except mysql.connector.Error as err:
+                print(f"Error: {err}")
+                conn_obj.rollback()
+            if user_id.startswith("UIC"):
+                print(" ")
+            else:
+                print("NOT OK")
+                break
+            account_no = input("ENTER YOUR ACCOUNT NO: ")
+            try:
+                cur_obj.execute("SELECT * FROM account_details WHERE account_no = %s", (account_no,))
+                result = cur_obj.fetchall()
+
+                if result:
+                    print(" ")
+                else:
+                    print("ACCOUNT NUMBER IS NOT AVAILABLE")
+                    break
+
+            except mysql.connector.Error as err:
+                print(f"Error: {err}")
+                conn_obj.rollback()
+            if len(account_no) == 10:
+                print(" ")
+            else:
+                print("NOT OK")
+                break
+            full_name = input("ENTER YOUR FULL NAME(IN CAPITAL LETTERS): ")
+            try:
+                cur_obj.execute("SELECT * FROM account_details WHERE full_name = %s", (full_name,))
+                result = cur_obj.fetchall()
+
+                if result:
+                    print(" ")
+                else:
+                    print("THIS NAME IS NOT AVAILABLE")
+                    break
+
+            except mysql.connector.Error as err:
+                print(f"Error: {err}")
+                conn_obj.rollback()
+            if full_name.isupper() == True:
+                print(" ")
+            else:
+                print("NOT OK")
+                break
+            amount = float(input("\nENTER AMOUNT TO WITHDRAWL: "))
+            date_of_withdrawl = input("\nENTER THE DATE(YYYY-MM-DD): ")
+            withdrawl_money(user_id, account_no, full_name, amount, date_of_withdrawl)
+        elif user_choice == '3':
+            sender_id = input("\nENTER YOUR USER ID: ")
+            try:
+                cur_obj.execute("SELECT * FROM account_details WHERE user_id = %s", (sender_id,))
+                result = cur_obj.fetchall()
+
+                if result:
+                    print(" ")
+                else:
+                    print("USER ID IS NOT AVAILABLE")
+                    break
+
+            except mysql.connector.Error as err:
+                print(f"Error: {err}")
+                conn_obj.rollback()
+            if sender_id.startswith("UIC"):
+                print(" ")
+            else:
+                print("NOT OK")
+                break
+            receiver_id = input("ENTER RECEIVER USER ID: ")
+            try:
+                cur_obj.execute("SELECT * FROM account_details WHERE user_id = %s", (receiver_id,))
+                result = cur_obj.fetchall()
+
+                if result:
+                    print(" ")
+                else:
+                    print("USER ID IS NOT AVAILABLE")
+                    break
+
+            except mysql.connector.Error as err:
+                print(f"Error: {err}")
+                conn_obj.rollback()
+            if receiver_id.startswith("UIC"):
+                print(" ")
+            else:
+                print("NOT OK")
+                break
+            amount = float(input("\nENTER THE AMOUNT YOU WANT TO TRANSFER: "))
+            date_of_transaction = input("\nENTER THE DATE(YYYY-MM-DD): ")
+            transfer_money(sender_id, receiver_id, amount, date_of_transaction)
+        elif user_choice == '4':
+            user_id = input("\nENTER YOUR USER ID TO CHECK BALANCE: ")
+            try:
+                cur_obj.execute("SELECT * FROM account_details WHERE user_id = %s", (user_id,))
+                result = cur_obj.fetchall()
+
+                if result:
+                    print(" ")
+                else:
+                    print("USER ID IS NOT AVAILABLE")
+                    break
+
+            except mysql.connector.Error as err:
+                print(f"Error: {err}")
+                conn_obj.rollback()
+            if user_id.startswith("UIC"):
+                print(" ")
+            else:
+                print("NOT OK")
+                break
+            account_no = input("ENTER YOUR ACCOUNT NO: ")
+            try:
+                cur_obj.execute("SELECT * FROM account_details WHERE account_no = %s", (account_no,))
+                result = cur_obj.fetchall()
+
+                if result:
+                    print(" ")
+                else:
+                    print("ACCOUNT NUMBER IS NOT AVAILABLE")
+                    break
+
+            except mysql.connector.Error as err:
+                print(f"Error: {err}")
+                conn_obj.rollback()
+            if len(account_no) == 10:
+                print(" ")
+            else:
+                print("NOT OK")
+                break
+            check_balance(user_id, account_no)
+        elif option == '5':
+            print("EXIT OUT SUCCESSFULY.")
+            break
+        else:
+            print("INVALID CHOICE. PLEASE ENTER VALID OPTION.")
+    elif option == '3':
+        user_id = input("\nENTER YOUR USER ID TO SEE YOUR TRANSACTION: ")
+        try:
+            cur_obj.execute("SELECT * FROM account_details WHERE user_id = %s", (user_id,))
+            result = cur_obj.fetchall()
+
+            if result:
+                print(" ")
+            else:
+                print("USER ID IS NOT AVAILABLE")
+                break
+
+        except mysql.connector.Error as err:
+            print(f"Error: {err}")
+            conn_obj.rollback()
+        if user_id.startswith("UIC"):
+            print(" ")
+        else:
+            print("NOT OK")
+            break
+        deposit_withdrawl_history(user_id)
+        transaction_history(user_id)
+    elif option == "4":
+        user_id = input("\nENTER YOUR USER ID TO CHECK BALANCE: ")
+        try:
+            cur_obj.execute("SELECT * FROM account_details WHERE user_id = %s", (user_id,))
+            result = cur_obj.fetchall()
+
+            if result:
+                print(" ")
+            else:
+                print("USER ID IS NOT AVAILABLE")
+                break
+
+        except mysql.connector.Error as err:
+            print(f"Error: {err}")
+            conn_obj.rollback()
+        if user_id.startswith("UIC"):
+            print(" ")
+        else:
+            print("NOT OK")
+            break
+        account_no = input("ENTER YOUR ACCOUNT NO: ")
+        try:
+            cur_obj.execute("SELECT * FROM account_details WHERE account_no = %s", (account_no,))
+            result = cur_obj.fetchall()
+
+            if result:
+                print(" ")
+            else:
+                print("ACCOUNT NUMBER IS NOT AVAILABLE")
+                break
+
+        except mysql.connector.Error as err:
+            print(f"Error: {err}")
+            conn_obj.rollback()
+        if len(account_no) == 10:
+            print(" ")
+        else:
+            print("NOT OK")
+            break
+        check_balance(user_id, account_no)
+    elif option == '5':
+        print("EXIT OUT SUCCESSFULY.")
+        break
+    else:
+        print("PLEASE ENTER VALID OPTION.")
+
+# Close the cursor and connection
+conn_obj.close()
