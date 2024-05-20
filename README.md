@@ -13,5 +13,6 @@ This project, developed in Python with an SQL database, offers comprehensive fun
 - input personal and professional details
 - create new bank accounts
 - perform various transactions like fund transfers, deposits, and withdrawals
+- forgot password & reset password with an OTP
 
 The system ensures secure handling of sensitive financial data and provides users with the ability to check their account balances and transaction history. With its intuitive interface and robust features, this project empowers users to manage their finances conveniently and efficiently. Explore the code repository for more details and contributions.
